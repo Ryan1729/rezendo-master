@@ -87,6 +87,10 @@ pub fn game_update_and_render(platform: &Platform,
     let mut left_mouse_pressed = false;
     let mut left_mouse_released = false;
 
+    let mut backspace_key = false;
+
+    let mut num_key = [false, false, false, false];
+
     for event in events {
         cross_mode_event_handling(platform, state, event);
 
@@ -111,68 +115,107 @@ pub fn game_update_and_render(platform: &Platform,
                 ctrl: _,
                 shift: _,
             } => return true,
+            Event::KeyReleased {
+                key: KeyCode::Row0,
+                ctrl: _,
+                shift: _,
+            } |
+            Event::KeyReleased {
+                key: KeyCode::Num0,
+                ctrl: _,
+                shift: _,
+            } => {
+                num_key[0] = true;
+            }
+            Event::KeyReleased {
+                key: KeyCode::Row1,
+                ctrl: _,
+                shift: _,
+            } |
+            Event::KeyReleased {
+                key: KeyCode::Num1,
+                ctrl: _,
+                shift: _,
+            } => {
+                num_key[1] = true;
+            }
+            Event::KeyReleased {
+                key: KeyCode::Row2,
+                ctrl: _,
+                shift: _,
+            } |
+            Event::KeyReleased {
+                key: KeyCode::Num2,
+                ctrl: _,
+                shift: _,
+            } => {
+                num_key[2] = true;
+            }
+            Event::KeyReleased {
+                key: KeyCode::Row3,
+                ctrl: _,
+                shift: _,
+            } |
+            Event::KeyReleased {
+                key: KeyCode::Num3,
+                ctrl: _,
+                shift: _,
+            } => {
+                num_key[3] = true;
+            }
+            Event::KeyReleased {
+                key: KeyCode::Backspace,
+                ctrl: _,
+                shift: _,
+            } => {
+                backspace_key = true;
+            }
             _ => (),
         }
     }
 
     state.ui_context.frame_init();
 
-    let zero_spec = ButtonSpec {
-        x: 0,
-        y: 0,
-        w: 5,
+    for index in 0..4 {
+        let i = index as i32;
+
+        let spec = ButtonSpec {
+            x: 20 + (i * 10),
+            y: 20,
+            w: 5,
+            h: 3,
+            text: index.to_string(),
+            id: i + 1,
+        };
+
+        if do_button(platform,
+                     &mut state.ui_context,
+                     &spec,
+                     left_mouse_pressed,
+                     left_mouse_released) || num_key[index] {
+            state.text.push_str(&index.to_string());
+        }
+    }
+
+    let spec = ButtonSpec {
+        x: 20 + (4 * 10),
+        y: 20,
+        w: 7,
         h: 3,
-        text: "0".to_string(),
-        id: 1,
+        text: "⌫".to_string(),
+        id: 10,
     };
 
     if do_button(platform,
                  &mut state.ui_context,
-                 &zero_spec,
+                 &spec,
                  left_mouse_pressed,
-                 left_mouse_released) {}
-    let one_spec = ButtonSpec {
-        x: 10,
-        y: 0,
-        w: 5,
-        h: 3,
-        text: "1".to_string(),
-        id: 2,
-    };
+                 left_mouse_released) || backspace_key {
+        state.text.pop();
+    }
 
-    if do_button(platform,
-                 &mut state.ui_context,
-                 &one_spec,
-                 left_mouse_pressed,
-                 left_mouse_released) {}
-    let two_spec = ButtonSpec {
-        x: 20,
-        y: 0,
-        w: 5,
-        h: 3,
-        text: "2".to_string(),
-        id: 3,
-    };
 
-    if do_button(platform,
-                 &mut state.ui_context,
-                 &two_spec,
-                 left_mouse_pressed,
-                 left_mouse_released) {}
-    let three_spec = ButtonSpec {
-        x: 30,
-        y: 0,
-        w: 5,
-        h: 3,
-        text: "3".to_string(),
-        id: 4,
-    };
-
-    if do_button(platform,
-                 &mut state.ui_context,
-                 &three_spec,
-                 left_mouse_pressed,
-                 left_mouse_released) {}
+    (platform.print_xy)(10, 10, &state.text);
 
     false
 }
@@ -231,7 +274,7 @@ fn do_button(platform: &Platform,
         context.set_next_hot(id);
     }
 
-    if context.active == id && (platform.key_pressed)(KeyCode::MouseLeft) {
+    if context.active == id && left_mouse_pressed {
         draw_rect_with(platform,
                        spec.x,
                        spec.y,

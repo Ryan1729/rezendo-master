@@ -40,7 +40,9 @@ impl Application {
 
     fn new_state(&self, size: common::Size) -> State {
         unsafe {
-            let f = self.library.get::<fn(common::Size) -> State>(b"new_state\0").unwrap();
+            let f = self.library
+                .get::<fn(common::Size) -> State>(b"new_state\0")
+                .unwrap();
 
             f(size)
         }
@@ -74,8 +76,12 @@ impl Application {
                          state: &mut State,
                          events: &Vec<Event>)
                          -> bool {
-        let mut new_events: Vec<common::Event> =
-            unsafe { events.iter().map(|a| mem::transmute::<Event, common::Event>(*a)).collect() };
+        let mut new_events: Vec<common::Event> = unsafe {
+            events
+                .iter()
+                .map(|a| mem::transmute::<Event, common::Event>(*a))
+                .collect()
+        };
         state_manipulation::update_and_render(platform, state, &mut new_events)
     }
 }
@@ -91,6 +97,11 @@ fn main() {
                            group: config::InputFilterGroup::Mouse,
                            both: false,
                        }]);
+    use bear_lib_terminal::terminal::config::font;
+    terminal::set(font::bitmap(font::Origin::Offset('⌫'), "backspace.png")
+                      .size(Size::new(32, 32))
+                      .align(font::Align::Center));
+
 
 
 
