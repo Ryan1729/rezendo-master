@@ -46,9 +46,7 @@ fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
     State {
         rng: rng,
         title_screen: title_screen,
-        x: 0,
-        row: row,
-        direction: Direction::Right,
+        text: String::new(),
         ui_context: UIContext::new(),
     }
 }
@@ -62,17 +60,19 @@ pub fn update_and_render(platform: &Platform, state: &mut State, events: &mut Ve
             cross_mode_event_handling(platform, state, event);
             match *event {
                 Event::Close |
-                Event::KeyPressed { key: KeyCode::Escape, ctrl: _, shift: _ } => return true,
-                Event::KeyPressed { key: _, ctrl: _, shift: _ } => state.title_screen = false,
+                Event::KeyPressed {
+                    key: KeyCode::Escape,
+                    ctrl: _,
+                    shift: _,
+                } => return true,
+                Event::KeyPressed {
+                    key: _,
+                    ctrl: _,
+                    shift: _,
+                } => state.title_screen = false,
                 _ => (),
             }
         }
-
-
-        state.x += 1;
-        state.x %= 80;
-
-        draw(platform, state);
 
         false
     } else {
@@ -91,87 +91,104 @@ pub fn game_update_and_render(platform: &Platform,
         cross_mode_event_handling(platform, state, event);
 
         match *event {
-            Event::KeyPressed { key: KeyCode::MouseLeft, ctrl: _, shift: _ } => {
+            Event::KeyPressed {
+                key: KeyCode::MouseLeft,
+                ctrl: _,
+                shift: _,
+            } => {
                 left_mouse_pressed = true;
             }
-            Event::KeyReleased { key: KeyCode::MouseLeft, ctrl: _, shift: _ } => {
+            Event::KeyReleased {
+                key: KeyCode::MouseLeft,
+                ctrl: _,
+                shift: _,
+            } => {
                 left_mouse_released = true;
             }
             Event::Close |
-            Event::KeyPressed { key: KeyCode::Escape, ctrl: _, shift: _ } => return true,
+            Event::KeyPressed {
+                key: KeyCode::Escape,
+                ctrl: _,
+                shift: _,
+            } => return true,
             _ => (),
         }
     }
 
-    match state.direction {
-        Direction::Right => {
-            state.x += 1;
-            state.x %= 80;
-        }
-        Direction::Left => {
-            state.x -= 1;
-            if state.x < 0 {
-                state.x = 79;
-            }
-        }
-    }
-
-    let len = state.row.len();
-    state.row[state.x as usize % len] = state.rng.gen::<u8>();
-
-    for i in 0..len {
-        let c = state.row[i];
-
-        (platform.print_xy)(i as i32, 16, &c.to_string());
-    }
-
     state.ui_context.frame_init();
 
-    let reverse_spec = ButtonSpec {
+    let zero_spec = ButtonSpec {
         x: 0,
         y: 0,
-        w: 11,
+        w: 5,
         h: 3,
-        text: "Reverse".to_string(),
+        text: "0".to_string(),
         id: 1,
     };
 
     if do_button(platform,
                  &mut state.ui_context,
-                 &reverse_spec,
+                 &zero_spec,
                  left_mouse_pressed,
-                 left_mouse_released) {
-        state.direction = match state.direction {
-            Direction::Right => Direction::Left,
-            Direction::Left => Direction::Right,
-        }
-    }
+                 left_mouse_released) {}
+    let one_spec = ButtonSpec {
+        x: 10,
+        y: 0,
+        w: 5,
+        h: 3,
+        text: "1".to_string(),
+        id: 2,
+    };
 
-    draw(platform, state);
+    if do_button(platform,
+                 &mut state.ui_context,
+                 &one_spec,
+                 left_mouse_pressed,
+                 left_mouse_released) {}
+    let two_spec = ButtonSpec {
+        x: 20,
+        y: 0,
+        w: 5,
+        h: 3,
+        text: "2".to_string(),
+        id: 3,
+    };
+
+    if do_button(platform,
+                 &mut state.ui_context,
+                 &two_spec,
+                 left_mouse_pressed,
+                 left_mouse_released) {}
+    let three_spec = ButtonSpec {
+        x: 30,
+        y: 0,
+        w: 5,
+        h: 3,
+        text: "3".to_string(),
+        id: 4,
+    };
+
+    if do_button(platform,
+                 &mut state.ui_context,
+                 &three_spec,
+                 left_mouse_pressed,
+                 left_mouse_released) {}
 
     false
 }
 
 fn cross_mode_event_handling(platform: &Platform, state: &mut State, event: &Event) {
     match *event {
-        Event::KeyPressed { key: KeyCode::R, ctrl: true, shift: _ } => {
+        Event::KeyPressed {
+            key: KeyCode::R,
+            ctrl: true,
+            shift: _,
+        } => {
             println!("reset");
             *state = new_state((platform.size)());
         }
         _ => (),
     }
-}
-
-fn draw(platform: &Platform, state: &State) {
-    //Demo:
-    //1. Run `cargo run` in the folder containing the `state_manipulation` folder
-    //   Leave the windoe open.
-    //2. Change this string and save the file.
-    //3. Run `cargo build` in the `state_manipulation` folder.
-    //4. See that the string has changed in the running  program!
-    (platform.print_xy)(34, 14, "Hello World!");
-
-    (platform.print_xy)(state.x, 15, "‾");
 }
 
 pub struct ButtonSpec {

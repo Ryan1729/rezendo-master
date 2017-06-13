@@ -25,9 +25,7 @@ pub struct Platform {
 pub struct State {
     pub rng: StdRng,
     pub title_screen: bool,
-    pub x: i32,
-    pub row: Vec<u8>,
-    pub direction: Direction,
+    pub text: String,
     pub ui_context: UIContext,
 }
 
