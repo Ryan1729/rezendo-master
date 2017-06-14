@@ -8,6 +8,7 @@ crate-type = ["dylib"]
 
 [dependencies]
 rand = "0.3"
+regex = "0.2"
 
 [dependencies.common]
 path = "../common"

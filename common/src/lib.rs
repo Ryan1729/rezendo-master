@@ -1,8 +1,11 @@
 extern crate rand;
+extern crate regex;
 
 use std::fmt;
 
 use rand::StdRng;
+
+use regex::Regex;
 
 pub struct Platform {
     pub print_xy: fn(i32, i32, &str),
@@ -26,6 +29,7 @@ pub struct State {
     pub rng: StdRng,
     pub title_screen: bool,
     pub text: String,
+    pub regex: Regex,
     pub ui_context: UIContext,
 }
 

@@ -1,7 +1,10 @@
 extern crate rand;
 extern crate common;
+extern crate regex;
 
 use common::*;
+
+use regex::Regex;
 
 use rand::{StdRng, SeedableRng, Rng};
 
@@ -47,6 +50,7 @@ fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
         rng: rng,
         title_screen: title_screen,
         text: String::new(),
+        regex: Regex::new("^[12]*[013]*$").unwrap(),
         ui_context: UIContext::new(),
     }
 }
@@ -214,11 +218,39 @@ pub fn game_update_and_render(platform: &Platform,
         state.text.pop();
     }
 
+    let fg = (platform.get_foreground)();
 
-    (platform.print_xy)(10, 10, &state.text);
+    if state.regex.is_match(&state.text) {
+        (platform.set_foreground)(MATCH_COLOUR);
+        (platform.print_xy)(7, 10, "☑");
+    } else {
+        (platform.set_foreground)(NON_MATCH_COLOUR);
+        (platform.print_xy)(7, 10, "☒");
+    }
+
+    if state.text.is_empty() {
+        (platform.print_xy)(10, 10, "ε");
+    } else {
+        (platform.print_xy)(10, 10, &state.text);
+    }
+
+    (platform.set_foreground)(fg);
 
     false
 }
+
+const NON_MATCH_COLOUR: Color = Color {
+    red: 255,
+    green: 0,
+    blue: 0,
+    alpha: 255,
+};
+const MATCH_COLOUR: Color = Color {
+    red: 0,
+    green: 255,
+    blue: 0,
+    alpha: 255,
+};
 
 fn cross_mode_event_handling(platform: &Platform, state: &mut State, event: &Event) {
     match *event {

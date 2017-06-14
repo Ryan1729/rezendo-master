@@ -101,6 +101,8 @@ fn main() {
     terminal::set(font::bitmap(font::Origin::Offset('⌫'), "backspace.png")
                       .size(Size::new(32, 32))
                       .align(font::Align::Center));
+    terminal::set(font::bitmap(font::Origin::Offset('☐'), "checkbox.png")
+                      .size(Size::new(16, 16)));
 
 
 
