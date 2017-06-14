@@ -46,11 +46,13 @@ fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
         row.push(rng.gen::<u8>());
     }
 
+    let regex = generate_regex(&mut rng);
+
     State {
         rng: rng,
         title_screen: title_screen,
         text: String::new(),
-        regex: Regex::new("^[12]*[013]*$").unwrap(),
+        regex,
         ui_context: UIContext::new(),
     }
 }

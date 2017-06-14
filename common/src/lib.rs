@@ -3,7 +3,7 @@ extern crate regex;
 
 use std::fmt;
 
-use rand::StdRng;
+use rand::{StdRng, Rand, Rng};
 
 use regex::Regex;
 
@@ -70,9 +70,158 @@ impl UIContext {
     }
 }
 
-pub enum Direction {
-    Right,
-    Left,
+pub enum Times {
+    Once,
+    ZeroOrMore,
+    OneOrMore,
+}
+use Times::*;
+
+impl Times {
+    fn as_str(&self) -> &'static str {
+        match self {
+            &Once => "",
+            &ZeroOrMore => "*",
+            &OneOrMore => "+",
+        }
+    }
+}
+
+impl Rand for Times {
+    fn rand<R: Rng>(rng: &mut R) -> Self {
+        match rng.gen_range(0, 3) {
+            0 => Once,
+            1 => ZeroOrMore,
+            _ => OneOrMore,
+        }
+    }
+}
+
+pub enum RERule {
+    Digit(Times),
+    Or,
+    Class(Times),
+    Group(Times),
+    Dot,
+}
+use RERule::*;
+
+impl Rand for RERule {
+    fn rand<R: Rng>(rng: &mut R) -> Self {
+        match rng.gen_range(0, 5) {
+            0 => Digit(rng.gen::<Times>()),
+            1 => Or,
+            2 => Class(rng.gen::<Times>()),
+            3 => Group(rng.gen::<Times>()),
+            _ => Dot,
+        }
+    }
+}
+
+pub fn generate_regex(rng: &mut StdRng) -> Regex {
+    loop {
+        let mut generated = generate_regex_helper(rng, String::new(), 0, 3);
+
+        generated.insert(0, '^');
+        generated.push('$');
+
+        let result = Regex::new(&generated);
+
+        debug_assert!(result.is_ok(), "bad regex generation!");
+
+        if let Ok(regex) = result {
+            return regex;
+        }
+    }
+}
+
+fn generate_regex_helper(rng: &mut StdRng, mut s: String, depth: u8, max: u8) -> String {
+    let rule = if depth <= max {
+        rng.gen::<RERule>()
+    } else {
+        match rng.gen_range(0, 3) {
+            0 => Digit(rng.gen::<Times>()),
+            1 => Class(rng.gen::<Times>()),
+            _ => Dot,
+        }
+    };
+
+    match rule {
+        Digit(t) => {
+            let digit_str = match rng.gen_range(0, 4) {
+                0 => "0",
+                1 => "1",
+                2 => "2",
+                _ => "3",
+            };
+            s.push_str(digit_str);
+            s.push_str(t.as_str());
+        }
+        Or => {
+            s = generate_regex_helper(rng, s, depth + 1, max);
+            s.push('|');
+            s = generate_regex_helper(rng, s, depth + 1, max);
+        }
+        Class(t) => {
+            s.push('[');
+            let class_str = match rng.gen_range(0, 14) {
+                0 => "0",
+                1 => "1",
+                2 => "2",
+                3 => "3",
+                4 => "01",
+                5 => "02",
+                6 => "03",
+                7 => "12",
+                8 => "13",
+                9 => "23",
+                10 => "012",
+                11 => "013",
+                12 => "023",
+                _ => "123",
+            };
+            s.push_str(class_str);
+            s.push(']');
+
+            s.push_str(t.as_str());
+        }
+        Group(times) => {
+            let t = match times {
+                Once => {
+                    if rng.gen::<bool>() {
+                        ZeroOrMore
+                    } else {
+                        OneOrMore
+                    }
+                }
+                otherwise => otherwise,
+            };
+
+            let regex_str = generate_regex_helper(rng, String::new(), depth + 1, max);
+
+            let mut finalized_regex_str = String::from("^");
+            finalized_regex_str.push_str(&regex_str);
+            finalized_regex_str.push('$');
+
+            //only generate groupings if they will matter
+            if Regex::new(&finalized_regex_str)
+                   .map(|regex| !regex.is_match(""))
+                   .unwrap_or(false) {
+                s.push('(');
+                s.push_str(&regex_str);
+                s.push(')');
+
+                s.push_str(t.as_str());
+            } else {
+                s.push_str(&regex_str);
+            }
+        }
+        Dot => {
+            s.push('.');
+        }
+    };
+
+    s
 }
 
 
