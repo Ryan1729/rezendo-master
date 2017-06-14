@@ -53,6 +53,7 @@ fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
         title_screen: title_screen,
         text: String::new(),
         regex,
+        examples: Vec::new(),
         ui_context: UIContext::new(),
     }
 }
@@ -94,6 +95,7 @@ pub fn game_update_and_render(platform: &Platform,
     let mut left_mouse_released = false;
 
     let mut backspace_key = false;
+    let mut enter_key = false;
 
     let mut num_key = [false, false, false, false];
 
@@ -176,6 +178,13 @@ pub fn game_update_and_render(platform: &Platform,
             } => {
                 backspace_key = true;
             }
+            Event::KeyReleased {
+                key: KeyCode::Enter,
+                ctrl: _,
+                shift: _,
+            } => {
+                enter_key = true;
+            }
             _ => (),
         }
     }
@@ -203,7 +212,7 @@ pub fn game_update_and_render(platform: &Platform,
         }
     }
 
-    let spec = ButtonSpec {
+    let backspace_spec = ButtonSpec {
         x: 20 + (4 * 10),
         y: 20,
         w: 7,
@@ -214,49 +223,49 @@ pub fn game_update_and_render(platform: &Platform,
 
     if do_button(platform,
                  &mut state.ui_context,
-                 &spec,
+                 &backspace_spec,
                  left_mouse_pressed,
                  left_mouse_released) || backspace_key {
         state.text.pop();
+    }
+    let enter_spec = ButtonSpec {
+        x: 18 + (4 * 10),
+        y: 25,
+        w: 11,
+        h: 3,
+        text: "Submit".to_string(),
+        id: 12,
+    };
+
+    if do_button(platform,
+                 &mut state.ui_context,
+                 &enter_spec,
+                 left_mouse_pressed,
+                 left_mouse_released) || enter_key {
+        if state.examples.iter().any(|e| e.text == state.text) {
+            //TODO note example was already added
+        } else {
+            state.examples.push(Example::new(&state.text, &state.regex))
+        }
     }
 
     (platform.print_xy)(20,
                         5,
                         state.regex.as_str().trim_matches(|c| c == '^' || c == '$'));
 
-    let fg = (platform.get_foreground)();
+    let current_example = Example::new(&state.text, &state.regex);
 
-    if state.regex.is_match(&state.text) {
-        (platform.set_foreground)(MATCH_COLOUR);
-        (platform.print_xy)(7, 10, "☑");
-    } else {
-        (platform.set_foreground)(NON_MATCH_COLOUR);
-        (platform.print_xy)(7, 10, "☒");
+    current_example.print_xy(platform, 7, 10);
+
+    //TODO pagination/scrolling
+    for (index, e) in state.examples.iter().enumerate() {
+        let i = index as i32;
+
+        e.print_xy(platform, 50, (2 * i) + 3);
     }
-
-    if state.text.is_empty() {
-        (platform.print_xy)(10, 10, "ε");
-    } else {
-        (platform.print_xy)(10, 10, &state.text);
-    }
-
-    (platform.set_foreground)(fg);
 
     false
 }
-
-const NON_MATCH_COLOUR: Color = Color {
-    red: 255,
-    green: 0,
-    blue: 0,
-    alpha: 255,
-};
-const MATCH_COLOUR: Color = Color {
-    red: 0,
-    green: 255,
-    blue: 0,
-    alpha: 255,
-};
 
 fn cross_mode_event_handling(platform: &Platform, state: &mut State, event: &Event) {
     match *event {

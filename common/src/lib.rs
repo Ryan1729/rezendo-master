@@ -30,8 +30,56 @@ pub struct State {
     pub title_screen: bool,
     pub text: String,
     pub regex: Regex,
+    pub examples: Vec<Example>,
     pub ui_context: UIContext,
 }
+
+pub struct Example {
+    pub text: String,
+    pub matched: bool,
+}
+
+impl Example {
+    pub fn new(text: &str, regex: &Regex) -> Self {
+        Example {
+            text: text.to_owned(),
+            matched: regex.is_match(text),
+        }
+    }
+
+    pub fn print_xy(&self, platform: &Platform, x: i32, y: i32) {
+        let fg = (platform.get_foreground)();
+
+        if self.matched {
+            (platform.set_foreground)(MATCH_COLOUR);
+            (platform.print_xy)(x, y, "☑");
+        } else {
+            (platform.set_foreground)(NON_MATCH_COLOUR);
+            (platform.print_xy)(x, y, "☒");
+        }
+
+        if self.text.is_empty() {
+            (platform.print_xy)(x + 3, y, "ε");
+        } else {
+            (platform.print_xy)(x + 3, y, &self.text);
+        }
+
+        (platform.set_foreground)(fg);
+    }
+}
+
+const NON_MATCH_COLOUR: Color = Color {
+    red: 255,
+    green: 0,
+    blue: 0,
+    alpha: 255,
+};
+const MATCH_COLOUR: Color = Color {
+    red: 0,
+    green: 255,
+    blue: 0,
+    alpha: 255,
+};
 
 pub type UiId = i32;
 
