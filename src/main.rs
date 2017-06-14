@@ -120,21 +120,21 @@ fn main() {
 
 
     let platform = Platform {
-        print_xy: terminal::print_xy,
-        clear: clear,
-        size: size,
-        pick: pick,
-        mouse_position: mouse_position,
+        print_xy,
+        clear,
+        size,
+        pick,
+        mouse_position,
         clicks: terminal::state::mouse::clicks,
-        key_pressed: key_pressed,
-        set_colors: set_colors,
-        get_colors: get_colors,
+        key_pressed,
+        set_colors,
+        get_colors,
         set_layer: terminal::layer,
         get_layer: terminal::state::layer,
-        set_foreground: set_foreground,
-        get_foreground: get_foreground,
-        set_background: set_background,
-        get_background: get_background,
+        set_foreground,
+        get_foreground,
+        set_background,
+        get_background,
     };
 
     //if this isn't set to something explicitly `get_foreground`
@@ -184,6 +184,29 @@ fn main() {
     }
 
     terminal::close();
+}
+
+fn should_double(c: char) -> bool {
+    c == '[' || c == ']'
+}
+
+fn print_xy(x: i32, y: i32, s: &str) {
+    //This slows every print down slightly, but for now, this is prefereable to
+    //platform details leaking into state_manipulation code.
+    if s.chars().any(should_double) {
+        let mut doubled = String::new();
+
+        for c in s.chars() {
+            if should_double(c) {
+                doubled.push(c);
+            }
+            doubled.push(c);
+        }
+
+        terminal::print_xy(x, y, &doubled);
+    } else {
+        terminal::print_xy(x, y, s);
+    }
 }
 
 fn clear(area: Option<common::Rect>) {

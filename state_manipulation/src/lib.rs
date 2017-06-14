@@ -218,6 +218,10 @@ pub fn game_update_and_render(platform: &Platform,
         state.text.pop();
     }
 
+    (platform.print_xy)(20,
+                        5,
+                        state.regex.as_str().trim_matches(|c| c == '^' || c == '$'));
+
     let fg = (platform.get_foreground)();
 
     if state.regex.is_match(&state.text) {
