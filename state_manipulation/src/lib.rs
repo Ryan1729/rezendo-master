@@ -54,6 +54,7 @@ fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
         text: String::new(),
         regex,
         examples: Vec::new(),
+        guessed_regex: Regex::new("").unwrap(),
         ui_context: UIContext::new(),
     }
 }
@@ -245,13 +246,71 @@ pub fn game_update_and_render(platform: &Platform,
         if state.examples.iter().any(|e| e.text == state.text) {
             //TODO note example was already added
         } else {
-            state.examples.push(Example::new(&state.text, &state.regex))
+            state.examples.push(Example::new(&state.text, &state.regex));
+
+            let mut guessed_regex;
+
+            if state.guessed_regex.as_str().is_empty() {
+                guessed_regex = state
+                    .examples
+                    .iter()
+                    .fold(String::new(), |mut acc, ex| {
+                        if ex.matched {
+                            if !acc.is_empty() {
+                                acc.push('|');
+                            };
+                            acc.push('(');
+                            acc.push_str(&ex.text);
+                            acc.push(')');
+
+                        };
+                        acc
+                    });
+            } else {
+                guessed_regex = state.guessed_regex.as_str().to_owned();
+
+                let mut sub_regexes = get_sub_regexes(&guessed_regex);
+                let new_example = state.examples.last().unwrap();
+                if new_example.matched {
+                    //extend a regex to make the new example match
+                    for s in sub_regexes.iter_mut() {
+                        if let Some(extended) = extend_to_fit(s, new_example) {
+                            *s = extended;
+                            break;
+                        }
+                    }
+                } else {
+                    //make sure none of the sub_regexes match the new example
+                    for s in sub_regexes.iter_mut() {
+                        if let Some(contracted) = contract_to_avoid(s, new_example) {
+                            *s = contracted;
+                        }
+                    }
+                }
+
+                guessed_regex = collect_sub_regexes(sub_regexes);
+            }
+
+
+            if let Ok(regex) = Regex::new(&guessed_regex) {
+                state.guessed_regex = regex;
+            } else {
+                if cfg!(debug_assertions) {
+                    println!("bad guess: {}", guessed_regex);
+                }
+            }
         }
     }
 
     (platform.print_xy)(20,
                         5,
                         state.regex.as_str().trim_matches(|c| c == '^' || c == '$'));
+    (platform.print_xy)(20,
+                        7,
+                        state
+                            .guessed_regex
+                            .as_str()
+                            .trim_matches(|c| c == '^' || c == '$'));
 
     let current_example = Example::new(&state.text, &state.regex);
 
@@ -265,6 +324,100 @@ pub fn game_update_and_render(platform: &Platform,
     }
 
     false
+}
+
+fn get_sub_regexes(regex: &str) -> Vec<String> {
+    let mut inner_regex = if regex.starts_with('^') {
+        regex.split_at(1).1
+    } else {
+        regex
+    };
+
+    inner_regex = if inner_regex.ends_with('$') {
+        inner_regex.split_at(inner_regex.len() - 1).0
+    } else {
+        inner_regex
+    };
+
+    inner_regex.split("|").map(String::from).collect()
+}
+
+fn extend_to_fit(regex_str: &str, example: &Example) -> Option<String> {
+    if let Ok(regex) = edged_regex(regex_str) {
+        if regex.is_match(&example.text) {
+            None
+        } else {
+            //TODO handle more cases
+            let mut try = format!("({}+)", regex_str);
+            println!("{}", try);
+
+            if edged_regex(&try)
+                   .map(|r| r.is_match(&example.text))
+                   .unwrap_or(false) {
+                return Some(try);
+            }
+
+            try = format!("({}*)", regex_str);
+
+            if edged_regex(&try)
+                   .map(|r| r.is_match(&example.text))
+                   .unwrap_or(false) {
+                return Some(try);
+            }
+
+            if cfg!(debug_assertions) {
+                println!("failed extension");
+            }
+
+            None
+        }
+    } else {
+        Some(String::from(".*"))
+    }
+}
+fn contract_to_avoid(regex_str: &str, example: &Example) -> Option<String> {
+    if let Ok(regex) = edged_regex(regex_str) {
+        if regex.is_match(&example.text) {
+            //TODO handle more cases
+            let len = example.text.len();
+
+            if example
+                   .text
+                   .chars()
+                   .nth(len - 2)
+                   .map(|c| c == '*' || c == '+')
+                   .unwrap_or(false) {
+                let mut try = example.text.to_owned();
+                try.remove(len - 2);
+                if edged_regex(&try)
+                       .map(|r| !r.is_match(&example.text))
+                       .unwrap_or(false) {
+                    return Some(try);
+                }
+            }
+
+            None
+        } else {
+            None
+        }
+    } else {
+        Some(String::from(""))
+    }
+}
+fn collect_sub_regexes(sub_regexes: Vec<String>) -> String {
+    let mut result = String::new();
+
+    let mut not_first = false;
+    for s in sub_regexes.iter() {
+        if not_first {
+            result.push('|');
+        } else {
+            not_first = true;
+        }
+        result.push_str(s);
+    }
+
+    result
 }
 
 fn cross_mode_event_handling(platform: &Platform, state: &mut State, event: &Event) {

@@ -30,6 +30,7 @@ pub struct State {
     pub title_screen: bool,
     pub text: String,
     pub regex: Regex,
+    pub guessed_regex: Regex,
     pub examples: Vec<Example>,
     pub ui_context: UIContext,
 }
@@ -164,6 +165,21 @@ impl Rand for RERule {
             _ => Dot,
         }
     }
+}
+
+pub fn edged_regex(s: &str) -> Result<Regex, regex::Error> {
+    //TODO could skip an allocation if already edged
+    let mut string = String::from(s);
+
+    if !string.starts_with('^') {
+        string.insert(0, '^');
+    }
+
+    if !string.ends_with('$') {
+        string.push('$');
+    }
+
+    Regex::new(&string)
 }
 
 pub fn generate_regex(rng: &mut StdRng) -> Regex {
