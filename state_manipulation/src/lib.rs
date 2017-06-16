@@ -291,6 +291,7 @@ pub fn game_update_and_render(platform: &Platform,
                 guessed_regex = collect_sub_regexes(sub_regexes);
             }
 
+            guessed_regex = remove_parens(&guessed_regex, &state.examples);
 
             if let Ok(regex) = Regex::new(&guessed_regex) {
                 state.guessed_regex = regex;
@@ -324,6 +325,91 @@ pub fn game_update_and_render(platform: &Platform,
     }
 
     false
+}
+
+fn remove_parens(regex: &str, _examples: &Vec<Example>) -> String {
+    let len = regex.len();
+
+    let mut removal_indicies = Vec::new();
+
+    for (left, _) in regex.match_indices('(') {
+        if let Some(right) = get_matching_paren_index(regex, left) {
+            println!("right {}", right);
+            if regex
+                   .chars()
+                   .nth(right + 1)
+                   .map(|c| c != '*' && c != '+')
+                   .unwrap_or(true) {
+                removal_indicies.push(left);
+                if right < len {
+                    removal_indicies.push(right);
+                }
+            } else {
+                //TODO remove the parens and the times and see if the result matches
+                // the examples
+                // if matches_examples(edged_regex(removed), examples) {
+                //
+                // }
+            }
+        }
+    }
+
+    let mut result = String::from(regex);
+    println!("result {}", result);
+    removal_indicies.sort();
+    println!("removal_indicies {:?}", removal_indicies);
+    for i in removal_indicies.iter().rev() {
+        result.remove(*i);
+    }
+
+    result
+}
+
+fn get_matching_paren_index(s: &str, left_index: usize) -> Option<usize> {
+    let mut right_index = left_index;
+    let mut counter = 1;
+    for c in s.chars().skip(left_index + 1) {
+        right_index += 1;
+
+        if c == '(' {
+            counter += 1;
+        } else if c == ')' {
+            counter -= 1;
+        }
+
+        if counter <= 0 {
+            return Some(right_index);
+        }
+    }
+
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::get_matching_paren_index;
+
+    #[test]
+    fn minimal_none() {
+        assert_eq!(None, get_matching_paren_index("", 0));
+        assert_eq!(None, get_matching_paren_index("(", 0));
+    }
+
+    #[test]
+    fn minimal_find() {
+        assert_eq!(Some(1), get_matching_paren_index("()", 0));
+    }
+
+    #[test]
+    fn inner() {
+        assert_eq!(Some(3), get_matching_paren_index("1(2)3", 1));
+    }
+
+    #[test]
+    fn nested() {
+        assert_eq!(Some(4), get_matching_paren_index("(1(2)3)", 2));
+        assert_eq!(Some(6), get_matching_paren_index("(1(2)3)", 0));
+    }
 }
 
 fn get_sub_regexes(regex: &str) -> Vec<String> {
