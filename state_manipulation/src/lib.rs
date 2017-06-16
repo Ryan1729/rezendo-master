@@ -18,7 +18,7 @@ pub fn new_state(size: Size) -> State {
     println!("debug on");
 
     let seed: &[_] = &[42];
-    let mut rng: StdRng = SeedableRng::from_seed(seed);
+    let rng: StdRng = SeedableRng::from_seed(seed);
 
     make_state(size, false, rng)
 }
@@ -292,9 +292,9 @@ pub fn game_update_and_render(platform: &Platform,
             }
 
             guessed_regex = remove_parens(&guessed_regex, &state.examples);
-            println!("guessed_regex before {}", guessed_regex);
+
             guessed_regex = convert_star_to_plus(&guessed_regex);
-            println!("guessed_regex after {}", guessed_regex);
+
 
             if let Ok(regex) = Regex::new(&guessed_regex) {
                 state.guessed_regex = regex;
@@ -332,7 +332,6 @@ pub fn game_update_and_render(platform: &Platform,
 
 
 fn convert_star_to_plus(regex: &str) -> String {
-
     let classes_and_chars = split_into_classes_and_chars(regex);
 
     let mut result = String::new();
@@ -356,6 +355,8 @@ fn convert_star_to_plus(regex: &str) -> String {
                 }
             }
         }
+    } else {
+        result.push_str(regex);
     }
 
     result
@@ -382,13 +383,13 @@ mod convert_star_to_plus {
         assert_eq!("2+", convert_star_to_plus("22*"));
         assert_eq!("3+", convert_star_to_plus("33*"));
     }
-    // #[test]
-    // fn one_digit_plus_to_plus() {
-    //     assert_eq!("0+", convert_star_to_plus("0+"));
-    //     assert_eq!("1+", convert_star_to_plus("1+"));
-    //     assert_eq!("2+", convert_star_to_plus("2+"));
-    //     assert_eq!("3+", convert_star_to_plus("3+"));
-    // }
+    #[test]
+    fn one_digit_plus_to_plus() {
+        assert_eq!("0+", convert_star_to_plus("0+"));
+        assert_eq!("1+", convert_star_to_plus("1+"));
+        assert_eq!("2+", convert_star_to_plus("2+"));
+        assert_eq!("3+", convert_star_to_plus("3+"));
+    }
 }
 
 fn split_into_classes_and_chars(regex: &str) -> Vec<&str> {
@@ -415,16 +416,13 @@ fn split_into_classes_and_chars(regex: &str) -> Vec<&str> {
     let mut last_index = 0;
 
     if spilt_indices.len() >= 2 {
-
-        println!("{:?} : {:?}", regex, spilt_indices);
         for indices in spilt_indices.windows(2) {
-            println!("indices {:?}", indices);
             result.push(unsafe { regex.slice_unchecked(indices[0], indices[1]) });
 
             last_index = indices[1];
         }
     }
-    println!("last_index {:?}", last_index);
+
     result.push(regex.split_at(last_index).1);
 
     result
@@ -709,15 +707,6 @@ fn draw_rect(platform: &Platform, x: i32, y: i32, w: i32, h: i32) {
                    w,
                    h,
                    ["┌", "─", "┐", "│", "│", "└", "─", "┘"]);
-}
-
-fn draw_double_line_rect(platform: &Platform, x: i32, y: i32, w: i32, h: i32) {
-    draw_rect_with(platform,
-                   x,
-                   y,
-                   w,
-                   h,
-                   ["╔", "═", "╗", "║", "║", "╚", "═", "╝"]);
 }
 
 fn draw_rect_with(platform: &Platform, x: i32, y: i32, w: i32, h: i32, edges: [&str; 8]) {
