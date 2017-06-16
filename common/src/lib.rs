@@ -32,7 +32,13 @@ pub struct State {
     pub regex: Regex,
     pub guessed_regex: Regex,
     pub examples: Vec<Example>,
+    pub turn: Turn,
     pub ui_context: UIContext,
+}
+
+pub enum Turn {
+    InProgress,
+    Finished,
 }
 
 pub struct Example {

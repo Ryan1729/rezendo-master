@@ -3,6 +3,7 @@ extern crate common;
 extern crate regex;
 
 use common::*;
+use common::Turn::*;
 
 use regex::Regex;
 
@@ -55,6 +56,7 @@ fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
         regex,
         examples: Vec::new(),
         guessed_regex: Regex::new("").unwrap(),
+        turn: InProgress,
         ui_context: UIContext::new(),
     }
 }
@@ -296,7 +298,7 @@ pub fn game_update_and_render(platform: &Platform,
             guessed_regex = convert_star_to_plus(&guessed_regex);
 
 
-            if let Ok(regex) = Regex::new(&guessed_regex) {
+            if let Ok(regex) = edged_regex(&guessed_regex) {
                 state.guessed_regex = regex;
             } else {
                 if cfg!(debug_assertions) {
@@ -320,11 +322,41 @@ pub fn game_update_and_render(platform: &Platform,
 
     current_example.print_xy(platform, 7, 10);
 
+
     //TODO pagination/scrolling
     for (index, e) in state.examples.iter().enumerate() {
         let i = index as i32;
 
         e.print_xy(platform, 50, (2 * i) + 3);
+    }
+
+    match state.turn {
+        InProgress => {
+            //TODO fuzzy matching or keep simplifying?
+            if state.regex.as_str() == state.guessed_regex.as_str() {
+                state.turn = Finished;
+            }
+        }
+        Finished => {
+            (platform.print_xy)(20, 15, "They figured it out!");
+
+            let new_spec = ButtonSpec {
+                x: 45,
+                y: 14,
+                w: 12,
+                h: 3,
+                text: "New Puzzle".to_string(),
+                id: 220,
+            };
+
+            if do_button(platform,
+                         &mut state.ui_context,
+                         &new_spec,
+                         left_mouse_pressed,
+                         left_mouse_released) {
+                *state = make_state((platform.size)(), false, state.rng);
+            }
+        }
     }
 
     false
@@ -552,10 +584,10 @@ fn extend_to_fit(regex_str: &str, example: &Example) -> Option<String> {
             }
 
             if cfg!(debug_assertions) {
-                println!("failed extension");
+                println!("default extension");
             }
 
-            None
+            Some(format!("{}|{}", regex_str, example.text))
         }
     } else {
         Some(String::from(".*"))
