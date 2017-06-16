@@ -292,6 +292,9 @@ pub fn game_update_and_render(platform: &Platform,
             }
 
             guessed_regex = remove_parens(&guessed_regex, &state.examples);
+            println!("guessed_regex before {}", guessed_regex);
+            guessed_regex = convert_star_to_plus(&guessed_regex);
+            println!("guessed_regex after {}", guessed_regex);
 
             if let Ok(regex) = Regex::new(&guessed_regex) {
                 state.guessed_regex = regex;
@@ -327,6 +330,106 @@ pub fn game_update_and_render(platform: &Platform,
     false
 }
 
+
+fn convert_star_to_plus(regex: &str) -> String {
+
+    let classes_and_chars = split_into_classes_and_chars(regex);
+
+    let mut result = String::new();
+
+    if classes_and_chars.len() >= 3 {
+        let mut windows = classes_and_chars.windows(3).peekable();
+
+        while let Some(w) = windows.next() {
+            if w[0] == w[1] && w[2].chars().nth(0) == Some('*') {
+                result.push_str(w[0]);
+                result.push('+');
+
+                windows.next();
+                windows.next();
+            } else {
+                result.push_str(w[0]);
+
+                if windows.peek().is_none() {
+                    result.push_str(w[1]);
+                    result.push_str(w[2]);
+                }
+            }
+        }
+    }
+
+    result
+}
+
+#[cfg(test)]
+mod convert_star_to_plus {
+    use super::convert_star_to_plus;
+    #[test]
+    fn minimal() {
+        assert_eq!("", convert_star_to_plus(""));
+    }
+    #[test]
+    fn one_digit() {
+        assert_eq!("0", convert_star_to_plus("0"));
+        assert_eq!("1", convert_star_to_plus("1"));
+        assert_eq!("2", convert_star_to_plus("2"));
+        assert_eq!("3", convert_star_to_plus("3"));
+    }
+    #[test]
+    fn one_digit_star_to_plus() {
+        assert_eq!("0+", convert_star_to_plus("00*"));
+        assert_eq!("1+", convert_star_to_plus("11*"));
+        assert_eq!("2+", convert_star_to_plus("22*"));
+        assert_eq!("3+", convert_star_to_plus("33*"));
+    }
+    // #[test]
+    // fn one_digit_plus_to_plus() {
+    //     assert_eq!("0+", convert_star_to_plus("0+"));
+    //     assert_eq!("1+", convert_star_to_plus("1+"));
+    //     assert_eq!("2+", convert_star_to_plus("2+"));
+    //     assert_eq!("3+", convert_star_to_plus("3+"));
+    // }
+}
+
+fn split_into_classes_and_chars(regex: &str) -> Vec<&str> {
+    let mut spilt_indices = Vec::new();
+
+    let mut split = true;
+
+    for (i, c) in regex.chars().enumerate() {
+        if c == '[' {
+            split = false;
+        }
+
+        if c == ']' {
+            split = true;
+        }
+
+        if split {
+            spilt_indices.push(i);
+        }
+    }
+
+    let mut result = Vec::new();
+
+    let mut last_index = 0;
+
+    if spilt_indices.len() >= 2 {
+
+        println!("{:?} : {:?}", regex, spilt_indices);
+        for indices in spilt_indices.windows(2) {
+            println!("indices {:?}", indices);
+            result.push(unsafe { regex.slice_unchecked(indices[0], indices[1]) });
+
+            last_index = indices[1];
+        }
+    }
+    println!("last_index {:?}", last_index);
+    result.push(regex.split_at(last_index).1);
+
+    result
+}
+
 fn remove_parens(regex: &str, _examples: &Vec<Example>) -> String {
     let len = regex.len();
 
@@ -334,7 +437,6 @@ fn remove_parens(regex: &str, _examples: &Vec<Example>) -> String {
 
     for (left, _) in regex.match_indices('(') {
         if let Some(right) = get_matching_paren_index(regex, left) {
-            println!("right {}", right);
             if regex
                    .chars()
                    .nth(right + 1)
@@ -355,9 +457,9 @@ fn remove_parens(regex: &str, _examples: &Vec<Example>) -> String {
     }
 
     let mut result = String::from(regex);
-    println!("result {}", result);
+
     removal_indicies.sort();
-    println!("removal_indicies {:?}", removal_indicies);
+
     for i in removal_indicies.iter().rev() {
         result.remove(*i);
     }
@@ -386,7 +488,7 @@ fn get_matching_paren_index(s: &str, left_index: usize) -> Option<usize> {
 }
 
 #[cfg(test)]
-mod tests {
+mod get_matching_paren_index {
     use super::get_matching_paren_index;
 
     #[test]
