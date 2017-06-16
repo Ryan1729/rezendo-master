@@ -306,6 +306,9 @@ pub fn game_update_and_render(platform: &Platform,
                 }
             }
         }
+
+        //TODO keep history and allow scrolling up and down
+        state.text.clear();
     }
 
     (platform.print_xy)(20,
