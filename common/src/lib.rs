@@ -432,7 +432,7 @@ impl Rect {
     /// # Examples
     ///
     /// ```
-    /// # use bear_lib_terminal::geometry::{Rect, Point, Size};
+    /// # use common::{Rect, Point, Size};
     /// let rect = Rect::from_size(Point::new(10, 20), Size::new(30, 40));
     /// assert_eq!(rect.top_left, Point::new(10, 20));
     /// assert_eq!(rect.top_right, Point::new(40, 20));
@@ -459,7 +459,7 @@ impl Rect {
     /// # Examples
     ///
     /// ```
-    /// # use bear_lib_terminal::geometry::{Rect, Point, Size};
+    /// # use common::{Rect, Point, Size};
     /// let rect = Rect::from_points(Point::new(10, 20), Point::new(30, 40));
     /// assert_eq!(rect.top_left, Point::new(10, 20));
     /// assert_eq!(rect.top_right, Point::new(30, 20));
@@ -480,7 +480,7 @@ impl Rect {
     /// # Examples
     ///
     /// ```
-    /// # use bear_lib_terminal::geometry::{Rect, Point, Size};
+    /// # use common::{Rect, Point, Size};
     /// assert_eq!(Rect::from_values(10, 20, 30, 40),
     ///     Rect::from_size(Point::new(10, 20), Size::new(30, 40)));
     /// ```
@@ -496,7 +496,7 @@ impl Rect {
     /// # Examples
     ///
     /// ```
-    /// # use bear_lib_terminal::geometry::{Rect, Point, Size};
+    /// # use common::{Rect, Point, Size};
     /// assert_eq!(Rect::from_point_values(10, 20, 30, 40),
     ///     Rect::from_points(Point::new(10, 20), Point::new(30, 40)));
     /// ```
