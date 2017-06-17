@@ -188,6 +188,47 @@ pub fn edged_regex(s: &str) -> Result<Regex, regex::Error> {
     Regex::new(&string)
 }
 
+pub fn sort_sub_regexes(regex: &str) -> String {
+    let mut sub_regexes = get_sub_regexes(regex);
+
+    sub_regexes.sort();
+
+    collect_sub_regexes(sub_regexes)
+}
+
+pub fn collect_sub_regexes(sub_regexes: Vec<String>) -> String {
+    let mut result = String::new();
+
+    let mut not_first = false;
+    for s in sub_regexes.iter() {
+        if not_first {
+            result.push('|');
+        } else {
+            not_first = true;
+        }
+        result.push_str(s);
+    }
+
+    result
+}
+
+pub fn get_sub_regexes(regex: &str) -> Vec<String> {
+    let mut inner_regex = if regex.starts_with('^') {
+        regex.split_at(1).1
+    } else {
+        regex
+    };
+
+    inner_regex = if inner_regex.ends_with('$') {
+        inner_regex.split_at(inner_regex.len() - 1).0
+    } else {
+        inner_regex
+    };
+
+    //TODO should this only split by the outermost layer of "|"? (i.e. not the ones in groups)
+    inner_regex.split("|").map(String::from).collect()
+}
+
 pub fn generate_regex(rng: &mut StdRng) -> Regex {
     loop {
         let mut generated = generate_regex_helper(rng, String::new(), 0, 3);
@@ -195,7 +236,7 @@ pub fn generate_regex(rng: &mut StdRng) -> Regex {
         generated.insert(0, '^');
         generated.push('$');
 
-        let result = Regex::new(&generated);
+        let result = edged_regex(&sort_sub_regexes(&generated));
 
         debug_assert!(result.is_ok(), "bad regex generation!");
 

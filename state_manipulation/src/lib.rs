@@ -295,6 +295,10 @@ pub fn game_update_and_render(platform: &Platform,
 
             guessed_regex = remove_parens(&guessed_regex, &state.examples);
 
+            guessed_regex = sort_sub_regexes(&guessed_regex);
+
+            guessed_regex = merge_into_classes(&guessed_regex);
+
             guessed_regex = convert_star_to_plus(&guessed_regex);
 
 
@@ -365,6 +369,202 @@ pub fn game_update_and_render(platform: &Platform,
     false
 }
 
+
+fn merge_into_classes(regex: &str) -> String {
+    let mut last_result = String::from(regex);
+
+    loop {
+        let current_result = merge_into_classes_once(&last_result);
+        if current_result == last_result {
+            return current_result;
+        } else {
+            last_result = current_result;
+        }
+    }
+}
+
+#[cfg(test)]
+mod merge_into_classes {
+    use super::merge_into_classes;
+    #[test]
+    fn minimal() {
+        assert_eq!("", merge_into_classes(""));
+    }
+    #[test]
+    fn one_digit() {
+        assert_eq!("0", merge_into_classes("0"));
+        assert_eq!("1", merge_into_classes("1"));
+        assert_eq!("2", merge_into_classes("2"));
+        assert_eq!("3", merge_into_classes("3"));
+    }
+    #[test]
+    fn one_digit_merge() {
+        assert_eq!("[01]", merge_into_classes("0|1"));
+        assert_eq!("[12]", merge_into_classes("1|2"));
+        assert_eq!("[23]", merge_into_classes("2|3"));
+        assert_eq!("[03]", merge_into_classes("3|0"));
+    }
+    #[test]
+    fn one_digit_plus() {
+        assert_eq!("0+", merge_into_classes("0+"));
+        assert_eq!("1+", merge_into_classes("1+"));
+        assert_eq!("2+", merge_into_classes("2+"));
+        assert_eq!("3+", merge_into_classes("3+"));
+    }
+}
+
+fn merge_into_classes_once(regex: &str) -> String {
+    let sub_regexes = get_sub_regexes(regex);
+
+    if sub_regexes.len() <= 1 {
+        return String::from(regex);
+    }
+
+    let mut windows = sub_regexes.windows(2).peekable();
+
+    let mut result: Vec<String> = Vec::new();
+
+    while let Some(w) = windows.next() {
+        let ref first = w[0];
+        let ref second = w[1];
+        if first == second {
+            result.push(first.to_owned());
+
+            windows.next();
+
+            continue;
+        }
+
+
+        {
+            let first_classes_and_chars = split_into_classes_and_chars(&first);
+            let second_classes_and_chars = split_into_classes_and_chars(&second);
+
+            if let Some(indices) = class_mismatch_indices(&first_classes_and_chars,
+                                                          &second_classes_and_chars) {
+                debug_assert!(first_classes_and_chars.len() == second_classes_and_chars.len());
+                let mut sub_regex = String::new();
+                for i in 0..first_classes_and_chars.len() {
+                    if indices.contains(&i) {
+                        sub_regex.push_str(&class_union(&first_classes_and_chars[i],
+                                                        &second_classes_and_chars[i]));
+                    } else {
+                        //they are assumed to match
+                        sub_regex.push_str(first_classes_and_chars[i]);
+                    }
+                }
+
+                result.push(sub_regex);
+
+                windows.next();
+
+                continue;
+            }
+        }
+
+        result.push(first.to_owned());
+
+        if windows.peek().is_none() {
+            result.push(second.to_owned());
+        }
+    }
+
+    collect_sub_regexes(result)
+
+}
+
+fn class_mismatch_indices(first_classes_and_chars: &Vec<&str>,
+                          second_classes_and_chars: &Vec<&str>)
+                          -> Option<Vec<usize>> {
+    if first_classes_and_chars.len() != second_classes_and_chars.len() {
+        return None;
+    }
+
+    let mut result = Vec::new();
+
+    for (i, (first, second)) in
+        first_classes_and_chars
+            .iter()
+            .zip(second_classes_and_chars.iter())
+            .enumerate() {
+        if is_class(first) && is_class(second) {
+            result.push(i);
+        } else if first != second {
+            return None;
+        }
+    }
+
+    Some(result)
+}
+
+fn is_digit(regex: &str) -> bool {
+    match regex {
+        "0" | "1" | "2" | "3" => true,
+        _ => false,
+    }
+}
+fn is_digit_char(c: char) -> bool {
+    match c {
+        '0' | '1' | '2' | '3' => true,
+        _ => false,
+    }
+}
+fn is_class(regex: &str) -> bool {
+    is_digit(regex) ||
+    {
+        regex.starts_with("[") && regex.ends_with("]") && regex.len() > 2 &&
+        get_middle(regex).chars().all(|c| is_digit_char(c))
+
+    }
+}
+
+fn get_middle(s: &str) -> &str {
+    let len = s.len();
+
+    if len > 2 {
+        unsafe { s.slice_unchecked(1, len - 1) }
+    } else {
+        s.split_at(0).0
+    }
+}
+
+fn class_union(r1: &str, r2: &str) -> String {
+    match (extract_class_digits(r1), extract_class_digits(r2)) {
+        (Some(d1), Some(d2)) => {
+            let mut chars: Vec<char> = d1.chars().chain(d2.chars()).collect();
+            chars.sort();
+            chars.dedup();
+
+            if chars.len() >= 4 {
+                String::from(".")
+            } else {
+                chars.insert(0, '[');
+                chars.push(']');
+
+                chars.into_iter().collect()
+            }
+        }
+        _ => format!("({}|{})", r1, r2),
+    }
+}
+
+//could make an enum since there are only 15 valid possibilities
+fn extract_class_digits(s: &str) -> Option<String> {
+    if is_class(s) {
+        if s.len() == 1 {
+            Some(String::from(s))
+        } else {
+            let result = get_middle(s);
+            if result.len() > 0 {
+                Some(String::from(result))
+            } else {
+                None
+            }
+        }
+    } else {
+        None
+    }
+}
 
 fn convert_star_to_plus(regex: &str) -> String {
     let classes_and_chars = split_into_classes_and_chars(regex);
@@ -547,22 +747,6 @@ mod get_matching_paren_index {
     }
 }
 
-fn get_sub_regexes(regex: &str) -> Vec<String> {
-    let mut inner_regex = if regex.starts_with('^') {
-        regex.split_at(1).1
-    } else {
-        regex
-    };
-
-    inner_regex = if inner_regex.ends_with('$') {
-        inner_regex.split_at(inner_regex.len() - 1).0
-    } else {
-        inner_regex
-    };
-
-    inner_regex.split("|").map(String::from).collect()
-}
-
 fn extend_to_fit(regex_str: &str, example: &Example) -> Option<String> {
     if let Ok(regex) = edged_regex(regex_str) {
         if regex.is_match(&example.text) {
@@ -624,21 +808,6 @@ fn contract_to_avoid(regex_str: &str, example: &Example) -> Option<String> {
     } else {
         Some(String::from(""))
     }
-}
-fn collect_sub_regexes(sub_regexes: Vec<String>) -> String {
-    let mut result = String::new();
-
-    let mut not_first = false;
-    for s in sub_regexes.iter() {
-        if not_first {
-            result.push('|');
-        } else {
-            not_first = true;
-        }
-        result.push_str(s);
-    }
-
-    result
 }
 
 fn cross_mode_event_handling(platform: &Platform, state: &mut State, event: &Event) {
