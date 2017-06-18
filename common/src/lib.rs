@@ -199,13 +199,20 @@ pub fn sort_sub_regexes(regex: &str) -> String {
 pub fn collect_sub_regexes(sub_regexes: Vec<String>) -> String {
     let mut result = String::new();
 
+    if sub_regexes.len() == 1 {
+        result.push_str(&sub_regexes[0]);
+        return result;
+    }
+
     let mut not_first = false;
+
     for s in sub_regexes.iter() {
         if not_first {
             result.push('|');
         } else {
             not_first = true;
         }
+
         result.push_str(s);
     }
 
@@ -236,7 +243,7 @@ pub fn generate_regex(rng: &mut StdRng) -> Regex {
         generated.insert(0, '^');
         generated.push('$');
 
-        let result = edged_regex(&sort_sub_regexes(&generated));
+        let result = edged_regex(&simplify_regex(&sort_sub_regexes(&generated)));
 
         debug_assert!(result.is_ok(), "bad regex generation!");
 
@@ -335,6 +342,507 @@ fn generate_regex_helper(rng: &mut StdRng, mut s: String, depth: u8, max: u8) ->
     s
 }
 
+pub fn simplify_regex(regex: &str) -> String {
+    let mut result = sort_sub_regexes(&regex);
+
+    result = remove_parens(&result);
+
+    result = merge_into_classes(&result);
+
+    result = convert_star_to_plus(&result);
+
+    result = convert_empty_or_plus_to_star(&result);
+
+    result
+}
+
+#[cfg(test)]
+mod simplify_regex {
+    use super::simplify_regex;
+    #[test]
+    fn minimal() {
+        assert_eq!("", simplify_regex(""));
+    }
+    #[test]
+    fn one_digit() {
+        assert_eq!("0", simplify_regex("0"));
+        assert_eq!("1", simplify_regex("1"));
+        assert_eq!("2", simplify_regex("2"));
+        assert_eq!("3", simplify_regex("3"));
+    }
+    #[test]
+    fn one_digit_merge() {
+        assert_eq!("[01]", simplify_regex("0|1"));
+        assert_eq!("[12]", simplify_regex("1|2"));
+        assert_eq!("[23]", simplify_regex("2|3"));
+        assert_eq!("[03]", simplify_regex("3|0"));
+    }
+    #[test]
+    fn one_digit_plus() {
+        assert_eq!("0+", simplify_regex("0+"));
+        assert_eq!("1+", simplify_regex("1+"));
+        assert_eq!("2+", simplify_regex("2+"));
+        assert_eq!("3+", simplify_regex("3+"));
+    }
+    #[test]
+    fn or_empty() {
+        assert_eq!("|0", simplify_regex("|0"));
+        assert_eq!("|1", simplify_regex("1|"));
+    }
+}
+
+fn convert_empty_or_plus_to_star(regex: &str) -> String {
+    let mut sub_regexes = get_sub_regexes(regex);
+    if sub_regexes.iter().any(|s| s.is_empty()) {
+        let mut found_one = false;
+        for s in sub_regexes.iter_mut() {
+            let len = s.len();
+            if len > 0 && s.ends_with('+') && is_class(s.split_at(len - 1).0) {
+                s.pop();
+                s.push('*');
+                found_one = true;
+                break;
+            }
+
+        }
+
+        if found_one {
+            sub_regexes.retain(|s| !s.is_empty());
+        }
+
+        collect_sub_regexes(sub_regexes)
+    } else {
+        String::from(regex)
+    }
+}
+
+fn merge_into_classes(regex: &str) -> String {
+    let mut last_result = String::from(regex);
+
+    loop {
+        let current_result = merge_into_classes_once(&last_result);
+        if current_result == last_result {
+            return current_result;
+        } else {
+            last_result = current_result;
+        }
+    }
+}
+
+#[cfg(test)]
+mod merge_into_classes {
+    use super::merge_into_classes;
+    #[test]
+    fn minimal() {
+        assert_eq!("", merge_into_classes(""));
+    }
+    #[test]
+    fn one_digit() {
+        assert_eq!("0", merge_into_classes("0"));
+        assert_eq!("1", merge_into_classes("1"));
+        assert_eq!("2", merge_into_classes("2"));
+        assert_eq!("3", merge_into_classes("3"));
+    }
+    #[test]
+    fn one_digit_merge() {
+        assert_eq!("[01]", merge_into_classes("0|1"));
+        assert_eq!("[12]", merge_into_classes("1|2"));
+        assert_eq!("[23]", merge_into_classes("2|3"));
+        assert_eq!("[03]", merge_into_classes("3|0"));
+    }
+    #[test]
+    fn one_digit_plus() {
+        assert_eq!("0+", merge_into_classes("0+"));
+        assert_eq!("1+", merge_into_classes("1+"));
+        assert_eq!("2+", merge_into_classes("2+"));
+        assert_eq!("3+", merge_into_classes("3+"));
+    }
+}
+
+fn merge_into_classes_once(regex: &str) -> String {
+    let sub_regexes = get_sub_regexes(regex);
+
+    if sub_regexes.len() <= 1 {
+        return String::from(regex);
+    }
+
+    let mut windows = sub_regexes.windows(2).peekable();
+
+    let mut result: Vec<String> = Vec::new();
+
+    while let Some(w) = windows.next() {
+        let ref first = w[0];
+        let ref second = w[1];
+        if first == second {
+            result.push(first.to_owned());
+
+            windows.next();
+
+            continue;
+        }
+
+
+        {
+            let first_classes_and_chars = split_into_classes_and_chars(&first);
+            let second_classes_and_chars = split_into_classes_and_chars(&second);
+
+            if let Some(indices) = class_mismatch_indices(&first_classes_and_chars,
+                                                          &second_classes_and_chars) {
+                debug_assert!(first_classes_and_chars.len() == second_classes_and_chars.len());
+                let mut sub_regex = String::new();
+                for i in 0..first_classes_and_chars.len() {
+                    if indices.contains(&i) {
+                        sub_regex.push_str(&class_union(&first_classes_and_chars[i],
+                                                        &second_classes_and_chars[i]));
+                    } else {
+                        //they are assumed to match
+                        sub_regex.push_str(first_classes_and_chars[i]);
+                    }
+                }
+
+                result.push(sub_regex);
+
+                windows.next();
+
+                continue;
+            }
+        }
+
+        result.push(first.to_owned());
+
+        if windows.peek().is_none() {
+            result.push(second.to_owned());
+        }
+    }
+
+    collect_sub_regexes(result)
+
+}
+
+fn class_mismatch_indices(first_classes_and_chars: &Vec<&str>,
+                          second_classes_and_chars: &Vec<&str>)
+                          -> Option<Vec<usize>> {
+    if first_classes_and_chars.len() != second_classes_and_chars.len() {
+        return None;
+    }
+
+    let mut result = Vec::new();
+
+    for (i, (first, second)) in
+        first_classes_and_chars
+            .iter()
+            .zip(second_classes_and_chars.iter())
+            .enumerate() {
+        if is_class(first) && is_class(second) {
+            result.push(i);
+        } else if first != second {
+            return None;
+        }
+    }
+
+    Some(result)
+}
+
+fn is_digit(regex: &str) -> bool {
+    match regex {
+        "0" | "1" | "2" | "3" => true,
+        _ => false,
+    }
+}
+fn is_digit_char(c: char) -> bool {
+    match c {
+        '0' | '1' | '2' | '3' => true,
+        _ => false,
+    }
+}
+fn is_class(regex: &str) -> bool {
+    is_digit(regex) ||
+    {
+        regex.starts_with("[") && regex.ends_with("]") && regex.len() > 2 &&
+        get_middle(regex).chars().all(|c| is_digit_char(c))
+
+    }
+}
+
+fn get_middle(s: &str) -> &str {
+    let len = s.len();
+
+    if len > 2 {
+        unsafe { s.slice_unchecked(1, len - 1) }
+    } else {
+        s.split_at(0).0
+    }
+}
+
+fn class_union(r1: &str, r2: &str) -> String {
+    match (extract_class_digits(r1), extract_class_digits(r2)) {
+        (Some(d1), Some(d2)) => {
+            let mut chars: Vec<char> = d1.chars().chain(d2.chars()).collect();
+            chars.sort();
+            chars.dedup();
+
+            if chars.len() >= 4 {
+                String::from(".")
+            } else {
+                chars.insert(0, '[');
+                chars.push(']');
+
+                chars.into_iter().collect()
+            }
+        }
+        _ => format!("({}|{})", r1, r2),
+    }
+}
+
+//could make an enum since there are only 15 valid possibilities
+fn extract_class_digits(s: &str) -> Option<String> {
+    if is_class(s) {
+        if s.len() == 1 {
+            Some(String::from(s))
+        } else {
+            let result = get_middle(s);
+            if result.len() > 0 {
+                Some(String::from(result))
+            } else {
+                None
+            }
+        }
+    } else {
+        None
+    }
+}
+
+fn convert_star_to_plus(regex: &str) -> String {
+    let classes_and_chars = split_into_classes_and_chars(regex);
+
+    let mut result = String::new();
+
+    if classes_and_chars.len() >= 3 {
+        let mut windows = classes_and_chars.windows(3).peekable();
+
+        while let Some(w) = windows.next() {
+            if w[0] == w[1] && w[2].chars().nth(0) == Some('*') {
+                result.push_str(w[0]);
+                result.push('+');
+
+                windows.next();
+                windows.next();
+            } else {
+                result.push_str(w[0]);
+
+                if windows.peek().is_none() {
+                    result.push_str(w[1]);
+                    result.push_str(w[2]);
+                }
+            }
+        }
+    } else {
+        result.push_str(regex);
+    }
+
+    result
+}
+
+#[cfg(test)]
+mod convert_star_to_plus {
+    use super::convert_star_to_plus;
+    #[test]
+    fn minimal() {
+        assert_eq!("", convert_star_to_plus(""));
+    }
+    #[test]
+    fn one_digit() {
+        assert_eq!("0", convert_star_to_plus("0"));
+        assert_eq!("1", convert_star_to_plus("1"));
+        assert_eq!("2", convert_star_to_plus("2"));
+        assert_eq!("3", convert_star_to_plus("3"));
+    }
+    #[test]
+    fn one_digit_star_to_plus() {
+        assert_eq!("0+", convert_star_to_plus("00*"));
+        assert_eq!("1+", convert_star_to_plus("11*"));
+        assert_eq!("2+", convert_star_to_plus("22*"));
+        assert_eq!("3+", convert_star_to_plus("33*"));
+    }
+    #[test]
+    fn one_digit_plus_to_plus() {
+        assert_eq!("0+", convert_star_to_plus("0+"));
+        assert_eq!("1+", convert_star_to_plus("1+"));
+        assert_eq!("2+", convert_star_to_plus("2+"));
+        assert_eq!("3+", convert_star_to_plus("3+"));
+    }
+}
+
+fn split_into_classes_and_chars(regex: &str) -> Vec<&str> {
+    let mut spilt_indices = Vec::new();
+
+    let mut split = true;
+
+    for (i, c) in regex.chars().enumerate() {
+        if c == '[' {
+            split = false;
+        }
+
+        if c == ']' {
+            split = true;
+        }
+
+        if split {
+            spilt_indices.push(i);
+        }
+    }
+
+    let mut result = Vec::new();
+
+    let mut last_index = 0;
+
+    if spilt_indices.len() >= 2 {
+        for indices in spilt_indices.windows(2) {
+            result.push(unsafe { regex.slice_unchecked(indices[0], indices[1]) });
+
+            last_index = indices[1];
+        }
+    }
+
+    result.push(regex.split_at(last_index).1);
+
+    result
+}
+
+fn remove_parens(regex: &str) -> String {
+    let mut removal_indicies = Vec::new();
+
+    for (left, _) in regex.match_indices('(') {
+        if let Some(right) = get_matching_paren_index(regex, left) {
+            let right_plus_1 = regex.chars().nth(right + 1);
+            if right_plus_1.map(|c| c != '*' && c != '+').unwrap_or(true) {
+                removal_indicies.push(left);
+
+                removal_indicies.push(right);
+            } else {
+                let all_but_last_between_parens = if left + 1 < right - 1 {
+                    unsafe { regex.slice_unchecked(left + 1, right - 1) }
+                } else {
+                    continue;
+                };
+
+                if is_class(all_but_last_between_parens) {
+                    //where `c` is a character clsaa
+                    //(c+)* = c* = (c*)+ = (c*)*
+                    //(c+)+ = c+
+                    match (regex.chars().nth(right - 1), right_plus_1) {
+                        //if the front is a star, leave that one
+                        (Some('*'), Some('*')) |
+                        (Some('+'), Some('*')) => {
+                            removal_indicies.push(left);
+
+                            removal_indicies.push(right - 1);
+                            removal_indicies.push(right);
+                        }
+                        //if the front is a plus, leave whatever is behind
+                        (Some('*'), Some('+')) |
+                        (Some('+'), Some('+')) => {
+                            removal_indicies.push(left);
+
+                            removal_indicies.push(right);
+                            removal_indicies.push(right + 1);
+
+                        }
+                        _ => {}
+                    }
+                }
+
+            }
+        }
+    }
+
+    let mut result = String::from(regex);
+
+    removal_indicies.sort();
+
+    for i in removal_indicies.iter().rev() {
+        result.remove(*i);
+    }
+
+    result
+}
+
+#[cfg(test)]
+mod remove_parens {
+    use super::remove_parens;
+    #[test]
+    fn minimal() {
+        assert_eq!("", remove_parens(""));
+    }
+    #[test]
+    fn one_digit_no_parens() {
+        assert_eq!("0", remove_parens("0"));
+        assert_eq!("1", remove_parens("1"));
+        assert_eq!("2", remove_parens("2"));
+        assert_eq!("3", remove_parens("3"));
+    }
+    #[test]
+    fn one_digit() {
+        assert_eq!("0", remove_parens("(0)"));
+        assert_eq!("1", remove_parens("(1)"));
+        assert_eq!("2", remove_parens("(2)"));
+        assert_eq!("3", remove_parens("(3)"));
+    }
+    #[test]
+    fn one_digit_star_and_plus() {
+        assert_eq!("0*", remove_parens("(0*)*"));
+        assert_eq!("1*", remove_parens("(1*)+"));
+        assert_eq!("2*", remove_parens("(2+)*"));
+        assert_eq!("3+", remove_parens("(3+)+"));
+    }
+}
+
+fn get_matching_paren_index(s: &str, left_index: usize) -> Option<usize> {
+    let mut right_index = left_index;
+    let mut counter = 1;
+    for c in s.chars().skip(left_index + 1) {
+        right_index += 1;
+
+        if c == '(' {
+            counter += 1;
+        } else if c == ')' {
+            counter -= 1;
+        }
+
+        if counter <= 0 {
+            return Some(right_index);
+        }
+    }
+
+    None
+}
+
+#[cfg(test)]
+mod get_matching_paren_index {
+    use super::get_matching_paren_index;
+
+    #[test]
+    fn minimal_none() {
+        assert_eq!(None, get_matching_paren_index("", 0));
+        assert_eq!(None, get_matching_paren_index("(", 0));
+    }
+
+    #[test]
+    fn minimal_find() {
+        assert_eq!(Some(1), get_matching_paren_index("()", 0));
+    }
+
+    #[test]
+    fn inner() {
+        assert_eq!(Some(3), get_matching_paren_index("1(2)3", 1));
+    }
+
+    #[test]
+    fn nested() {
+        assert_eq!(Some(4), get_matching_paren_index("(1(2)3)", 2));
+        assert_eq!(Some(6), get_matching_paren_index("(1(2)3)", 0));
+    }
+}
 
 
 
