@@ -282,20 +282,16 @@ fn generate_regex_helper(rng: &mut StdRng, mut s: String, depth: u8, max: u8) ->
         }
         Class(t) => {
             s.push('[');
-            let class_str = match rng.gen_range(0, 14) {
-                0 => "0",
-                1 => "1",
-                2 => "2",
-                3 => "3",
-                4 => "01",
-                5 => "02",
-                6 => "03",
-                7 => "12",
-                8 => "13",
-                9 => "23",
-                10 => "012",
-                11 => "013",
-                12 => "023",
+            let class_str = match rng.gen_range(0, 11) {
+                1 => "01",
+                2 => "02",
+                3 => "03",
+                4 => "12",
+                5 => "13",
+                6 => "23",
+                7 => "012",
+                8 => "013",
+                9 => "023",
                 _ => "123",
             };
             s.push_str(class_str);
