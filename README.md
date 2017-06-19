@@ -1,6 +1,9 @@
-This is a template to make it easy to get started with live code reloading using BearLibTerminal.
+This is a version of [Rezendo](https://codewiz.org/~scubed/rezendo/rezendo.html#r=le4PAASH8KwFgrs4Qc8) (which is a version of [Zendo](http://www.koryheath.com/zendo/) using regular expressions) where *you* play as the master. It is currently "playable" but it often produces puzzles that the computer player will never figure out. (for example `1+|[012]*`)For those puzzles where it will work, getting the computer player to figure out the puzzle more or less comes down to understanding how it was programmed, which I (as the one who programmed it,) don't find particularly entertaining. So I'm shelving this for now. I currently consider this a failed experiment, but it was still worth trying.
 
-Currently the live reloading is only tested/working on Linux, but the resulting program can be compiled in release mode for Linux and Windows. MacOS currently is untested.
+## Possible Future Work
+* reset button to clear computer player's memory of the current puzzle.
+* instead of comparing simplified regex strings, [take a more theoretically grounded approach](https://cs.stackexchange.com/questions/12876/equivalence-of-regular-expressions)
+
 
 ## Installing required lib on Linux
 
