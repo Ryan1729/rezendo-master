@@ -191,7 +191,12 @@ pub fn edged_regex(s: &str) -> Result<Regex, regex::Error> {
 pub fn sort_sub_regexes(regex: &str) -> String {
     let mut sub_regexes = get_sub_regexes(regex);
 
+    for s in sub_regexes.iter_mut() {
+        *s = remove_parens(&s);
+    }
+
     sub_regexes.sort();
+    sub_regexes.dedup();
 
     collect_sub_regexes(sub_regexes)
 }
@@ -339,9 +344,21 @@ fn generate_regex_helper(rng: &mut StdRng, mut s: String, depth: u8, max: u8) ->
 }
 
 pub fn simplify_regex(regex: &str) -> String {
-    let mut result = sort_sub_regexes(&regex);
+    let mut last_result = String::from(regex);
 
-    result = remove_parens(&result);
+    loop {
+        let current_result = simplify_regex_once(&last_result);
+        if current_result == last_result {
+            return current_result;
+        } else {
+            last_result = current_result;
+        }
+    }
+}
+pub fn simplify_regex_once(regex: &str) -> String {
+    let mut result = remove_parens(&regex);
+
+    result = sort_sub_regexes(&result);
 
     result = merge_into_classes(&result);
 
@@ -384,6 +401,11 @@ mod simplify_regex {
     fn or_empty() {
         assert_eq!("|0", simplify_regex("|0"));
         assert_eq!("|1", simplify_regex("1|"));
+    }
+    #[test]
+    fn found_example_1() {
+        assert_eq!(".|1+|[012]*", simplify_regex("(1)+|.|1+|[012]*"));
+
     }
 }
 
@@ -716,8 +738,22 @@ fn remove_parens(regex: &str) -> String {
 
                 removal_indicies.push(right);
             } else {
+                let between_parens = if left + 1 < right {
+                    unsafe { regex.slice_unchecked(left + 1, right) }
+                } else {
+                    continue;
+                };
+
+                if is_class(between_parens) {
+                    removal_indicies.push(left);
+
+                    removal_indicies.push(right);
+
+                    continue;
+                };
+
                 let all_but_last_between_parens = if left + 1 < right - 1 {
-                    unsafe { regex.slice_unchecked(left + 1, right - 1) }
+                    between_parens.split_at(between_parens.len() - 1).0
                 } else {
                     continue;
                 };
@@ -783,6 +819,11 @@ mod remove_parens {
         assert_eq!("1", remove_parens("(1)"));
         assert_eq!("2", remove_parens("(2)"));
         assert_eq!("3", remove_parens("(3)"));
+    }
+    #[test]
+    fn one_digit_times() {
+        assert_eq!("0*", remove_parens("(0)*"));
+        assert_eq!("1+", remove_parens("(1)+"));
     }
     #[test]
     fn one_digit_star_and_plus() {

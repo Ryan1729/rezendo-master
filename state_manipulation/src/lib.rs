@@ -41,12 +41,6 @@ pub fn new_state(size: Size) -> State {
 
 
 fn make_state(size: Size, title_screen: bool, mut rng: StdRng) -> State {
-    let mut row = Vec::new();
-
-    for _ in 0..size.width {
-        row.push(rng.gen::<u8>());
-    }
-
     let regex = generate_regex(&mut rng);
 
     State {
